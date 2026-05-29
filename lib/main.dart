@@ -1,3 +1,4 @@
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -560,7 +561,7 @@ class _MissionSheet extends StatelessWidget {
               const SizedBox(height: 12),
               const _GuideBlock(
                 title: '촬영 팁',
-                body: '카메라 앱을 열고 기능을 직접 켠 다음 촬영하세요. 제출 버튼은 MVP라서 완료 처리만 합니다.',
+                body: '앱 안에서 실제 카메라를 열어 줌, 초점, 노출, 플래시를 조절하며 촬영하세요.',
                 icon: Icons.lightbulb_rounded,
               ),
               const SizedBox(height: 20),
@@ -571,10 +572,19 @@ class _MissionSheet extends StatelessWidget {
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
                 ),
-                onPressed: onComplete,
+                onPressed: () async {
+                  final captured = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => CameraLabPage(mission: mission),
+                    ),
+                  );
+                  if (captured == true) {
+                    onComplete();
+                  }
+                },
                 icon: const Icon(Icons.camera_alt_rounded),
                 label: const Text(
-                  '찍었다고 치고 제출',
+                  '인앱 카메라로 촬영',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
                 ),
               ),
@@ -582,6 +592,602 @@ class _MissionSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class CameraLabPage extends StatefulWidget {
+  const CameraLabPage({super.key, required this.mission});
+
+  final CameraMission mission;
+
+  @override
+  State<CameraLabPage> createState() => _CameraLabPageState();
+}
+
+class _CameraLabPageState extends State<CameraLabPage> with WidgetsBindingObserver {
+  final flashModes = const [
+    FlashMode.off,
+    FlashMode.auto,
+    FlashMode.always,
+    FlashMode.torch,
+  ];
+
+  List<CameraDescription> cameras = [];
+  CameraController? controller;
+  XFile? lastShot;
+  String statusMessage = '카메라를 준비하고 있어요.';
+  double minZoom = 1;
+  double maxZoom = 1;
+  double zoom = 1;
+  double minExposure = 0;
+  double maxExposure = 0;
+  double exposure = 0;
+  FlashMode flashMode = FlashMode.off;
+  FocusMode focusMode = FocusMode.auto;
+  ExposureMode exposureMode = ExposureMode.auto;
+  bool isBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadCameras();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final activeController = controller;
+    if (activeController == null || !activeController.value.isInitialized) {
+      return;
+    }
+
+    if (state == AppLifecycleState.inactive) {
+      activeController.dispose();
+    } else if (state == AppLifecycleState.resumed && cameras.isNotEmpty) {
+      _initializeCamera(activeController.description);
+    }
+  }
+
+  Future<void> _loadCameras() async {
+    try {
+      cameras = await availableCameras();
+      if (cameras.isEmpty) {
+        _setStatus('사용 가능한 카메라를 찾지 못했어요.');
+        return;
+      }
+      await _initializeCamera(cameras.first);
+    } on CameraException catch (error) {
+      _setStatus('카메라를 열 수 없어요: ${error.description ?? error.code}');
+    }
+  }
+
+  Future<void> _initializeCamera(CameraDescription camera) async {
+    setState(() {
+      isBusy = true;
+      statusMessage = '카메라를 여는 중이에요.';
+    });
+
+    final previous = controller;
+    final next = CameraController(
+      camera,
+      ResolutionPreset.high,
+      enableAudio: false,
+    );
+
+    try {
+      await previous?.dispose();
+      await next.initialize();
+      minZoom = await next.getMinZoomLevel();
+      maxZoom = await next.getMaxZoomLevel();
+      minExposure = await next.getMinExposureOffset();
+      maxExposure = await next.getMaxExposureOffset();
+      zoom = minZoom.clamp(minZoom, maxZoom);
+      exposure = 0.clamp(minExposure, maxExposure).toDouble();
+      await next.setZoomLevel(zoom);
+      await next.setExposureOffset(exposure);
+      await next.setFlashMode(flashMode);
+
+      if (!mounted) return;
+      setState(() {
+        controller = next;
+        isBusy = false;
+        statusMessage = '화면을 탭하면 초점과 노출 기준점이 이동해요.';
+      });
+    } on CameraException catch (error) {
+      await next.dispose();
+      if (!mounted) return;
+      setState(() {
+        isBusy = false;
+        statusMessage = '카메라 초기화 실패: ${error.description ?? error.code}';
+      });
+    }
+  }
+
+  Future<void> _switchCamera() async {
+    if (cameras.length < 2 || isBusy) return;
+    final active = controller?.description;
+    final currentIndex = active == null ? 0 : cameras.indexOf(active);
+    final nextIndex = (currentIndex + 1) % cameras.length;
+    await _initializeCamera(cameras[nextIndex]);
+  }
+
+  Future<void> _setZoom(double value) async {
+    final activeController = controller;
+    if (activeController == null) return;
+    final next = value.clamp(minZoom, maxZoom).toDouble();
+    setState(() => zoom = next);
+    try {
+      await activeController.setZoomLevel(next);
+    } on CameraException catch (error) {
+      _setStatus('줌 조절 실패: ${error.description ?? error.code}');
+    }
+  }
+
+  Future<void> _setExposure(double value) async {
+    final activeController = controller;
+    if (activeController == null) return;
+    final next = value.clamp(minExposure, maxExposure).toDouble();
+    setState(() => exposure = next);
+    try {
+      await activeController.setExposureOffset(next);
+    } on CameraException catch (error) {
+      _setStatus('노출 조절 실패: ${error.description ?? error.code}');
+    }
+  }
+
+  Future<void> _setFlash(FlashMode mode) async {
+    final activeController = controller;
+    if (activeController == null) return;
+    try {
+      await activeController.setFlashMode(mode);
+      setState(() => flashMode = mode);
+    } on CameraException catch (error) {
+      _setStatus('이 기기에서 해당 플래시 모드를 지원하지 않아요: ${error.description ?? error.code}');
+    }
+  }
+
+  Future<void> _toggleFocusMode() async {
+    final activeController = controller;
+    if (activeController == null) return;
+    final next = focusMode == FocusMode.auto ? FocusMode.locked : FocusMode.auto;
+    try {
+      await activeController.setFocusMode(next);
+      setState(() => focusMode = next);
+    } on CameraException catch (error) {
+      _setStatus('초점 모드 변경 실패: ${error.description ?? error.code}');
+    }
+  }
+
+  Future<void> _toggleExposureMode() async {
+    final activeController = controller;
+    if (activeController == null) return;
+    final next = exposureMode == ExposureMode.auto ? ExposureMode.locked : ExposureMode.auto;
+    try {
+      await activeController.setExposureMode(next);
+      setState(() => exposureMode = next);
+    } on CameraException catch (error) {
+      _setStatus('노출 모드 변경 실패: ${error.description ?? error.code}');
+    }
+  }
+
+  Future<void> _focusAt(TapDownDetails details, BoxConstraints constraints) async {
+    final activeController = controller;
+    if (activeController == null || !activeController.value.isInitialized) return;
+
+    final point = Offset(
+      (details.localPosition.dx / constraints.maxWidth).clamp(0, 1).toDouble(),
+      (details.localPosition.dy / constraints.maxHeight).clamp(0, 1).toDouble(),
+    );
+
+    try {
+      await activeController.setFocusPoint(point);
+      await activeController.setExposurePoint(point);
+      _setStatus('초점/노출 기준점: ${(point.dx * 100).round()}%, ${(point.dy * 100).round()}%');
+    } on CameraException catch (error) {
+      _setStatus('터치 초점 실패: ${error.description ?? error.code}');
+    }
+  }
+
+  Future<void> _takePicture() async {
+    final activeController = controller;
+    if (activeController == null || !activeController.value.isInitialized || isBusy) {
+      return;
+    }
+
+    setState(() => isBusy = true);
+    try {
+      final shot = await activeController.takePicture();
+      if (!mounted) return;
+      setState(() {
+        lastShot = shot;
+        isBusy = false;
+        statusMessage = '촬영 완료: ${shot.name}';
+      });
+    } on CameraException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        isBusy = false;
+        statusMessage = '촬영 실패: ${error.description ?? error.code}';
+      });
+    }
+  }
+
+  void _setStatus(String message) {
+    if (!mounted) return;
+    setState(() => statusMessage = message);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final activeController = controller;
+    final ready = activeController != null && activeController.value.isInitialized;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF171412),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF171412),
+        foregroundColor: Colors.white,
+        title: Text(widget.mission.title),
+        actions: [
+          IconButton(
+            tooltip: '카메라 전환',
+            onPressed: cameras.length > 1 ? _switchCamera : null,
+            icon: const Icon(Icons.cameraswitch_rounded),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: ColoredBox(
+                  color: Colors.black,
+                  child: ready
+                      ? LayoutBuilder(
+                          builder: (context, constraints) {
+                            return GestureDetector(
+                              onTapDown: (details) => _focusAt(details, constraints),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Center(
+                                    child: CameraPreview(activeController),
+                                  ),
+                                  const _CameraGridOverlay(),
+                                  Positioned(
+                                    left: 16,
+                                    right: 16,
+                                    bottom: 16,
+                                    child: _CameraStatusPill(text: statusMessage),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        )
+                      : Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              statusMessage,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          ),
+          _CameraControlPanel(
+            zoom: zoom,
+            minZoom: minZoom,
+            maxZoom: maxZoom,
+            exposure: exposure,
+            minExposure: minExposure,
+            maxExposure: maxExposure,
+            flashMode: flashMode,
+            focusMode: focusMode,
+            exposureMode: exposureMode,
+            flashModes: flashModes,
+            lastShotName: lastShot?.name,
+            isBusy: isBusy,
+            onZoomChanged: ready ? _setZoom : null,
+            onExposureChanged: ready ? _setExposure : null,
+            onFlashChanged: ready ? _setFlash : null,
+            onFocusToggle: ready ? _toggleFocusMode : null,
+            onExposureToggle: ready ? _toggleExposureMode : null,
+            onCapture: ready ? _takePicture : null,
+            onSubmit: lastShot == null ? null : () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CameraGridOverlay extends StatelessWidget {
+  const _CameraGridOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: CustomPaint(painter: _CameraGridPainter()),
+    );
+  }
+}
+
+class _CameraGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.28)
+      ..strokeWidth = 1;
+
+    canvas.drawLine(Offset(size.width / 3, 0), Offset(size.width / 3, size.height), paint);
+    canvas.drawLine(Offset(size.width * 2 / 3, 0), Offset(size.width * 2 / 3, size.height), paint);
+    canvas.drawLine(Offset(0, size.height / 3), Offset(size.width, size.height / 3), paint);
+    canvas.drawLine(Offset(0, size.height * 2 / 3), Offset(size.width, size.height * 2 / 3), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _CameraStatusPill extends StatelessWidget {
+  const _CameraStatusPill({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.58),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+}
+
+class _CameraControlPanel extends StatelessWidget {
+  const _CameraControlPanel({
+    required this.zoom,
+    required this.minZoom,
+    required this.maxZoom,
+    required this.exposure,
+    required this.minExposure,
+    required this.maxExposure,
+    required this.flashMode,
+    required this.focusMode,
+    required this.exposureMode,
+    required this.flashModes,
+    required this.lastShotName,
+    required this.isBusy,
+    required this.onZoomChanged,
+    required this.onExposureChanged,
+    required this.onFlashChanged,
+    required this.onFocusToggle,
+    required this.onExposureToggle,
+    required this.onCapture,
+    required this.onSubmit,
+  });
+
+  final double zoom;
+  final double minZoom;
+  final double maxZoom;
+  final double exposure;
+  final double minExposure;
+  final double maxExposure;
+  final FlashMode flashMode;
+  final FocusMode focusMode;
+  final ExposureMode exposureMode;
+  final List<FlashMode> flashModes;
+  final String? lastShotName;
+  final bool isBusy;
+  final ValueChanged<double>? onZoomChanged;
+  final ValueChanged<double>? onExposureChanged;
+  final ValueChanged<FlashMode>? onFlashChanged;
+  final VoidCallback? onFocusToggle;
+  final VoidCallback? onExposureToggle;
+  final VoidCallback? onCapture;
+  final VoidCallback? onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFF8EF),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '카메라 실습실',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                _ModeChip(label: '조리개: 기기 고정', icon: Icons.blur_on_rounded),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Android 공개 카메라 API에서 지원하는 기능만 제어됩니다.',
+              style: TextStyle(color: Colors.brown.shade500, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            _LabeledSlider(
+              label: '줌 ${zoom.toStringAsFixed(1)}x',
+              value: zoom,
+              min: minZoom,
+              max: maxZoom,
+              onChanged: onZoomChanged,
+            ),
+            _LabeledSlider(
+              label: '노출 ${exposure.toStringAsFixed(1)}',
+              value: exposure,
+              min: minExposure,
+              max: maxExposure,
+              onChanged: onExposureChanged,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final mode in flashModes)
+                  ChoiceChip(
+                    label: Text(_flashLabel(mode)),
+                    selected: flashMode == mode,
+                    onSelected: onFlashChanged == null ? null : (_) => onFlashChanged!(mode),
+                  ),
+                ActionChip(
+                  avatar: const Icon(Icons.center_focus_strong_rounded, size: 18),
+                  label: Text(focusMode == FocusMode.auto ? '초점 자동' : '초점 잠금'),
+                  onPressed: onFocusToggle,
+                ),
+                ActionChip(
+                  avatar: const Icon(Icons.exposure_rounded, size: 18),
+                  label: Text(exposureMode == ExposureMode.auto ? '노출 자동' : '노출 잠금'),
+                  onPressed: onExposureToggle,
+                ),
+              ],
+            ),
+            if (lastShotName != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                '마지막 촬영: $lastShotName',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ],
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(54),
+                      backgroundColor: const Color(0xFFFF7A59),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    onPressed: isBusy ? null : onCapture,
+                    icon: const Icon(Icons.camera_alt_rounded),
+                    label: Text(isBusy ? '처리 중' : '촬영'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(54),
+                      backgroundColor: const Color(0xFF2F2A25),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    onPressed: onSubmit,
+                    icon: const Icon(Icons.check_rounded),
+                    label: const Text('미션 제출'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _flashLabel(FlashMode mode) {
+    return switch (mode) {
+      FlashMode.off => '플래시 끔',
+      FlashMode.auto => '자동',
+      FlashMode.always => '켜짐',
+      FlashMode.torch => '조명',
+    };
+  }
+}
+
+class _ModeChip extends StatelessWidget {
+  const _ModeChip({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFE1D5),
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFFFF7A59)),
+          const SizedBox(width: 5),
+          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+}
+
+class _LabeledSlider extends StatelessWidget {
+  const _LabeledSlider({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onChanged != null && max > min;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+        Slider(
+          value: value.clamp(min, max).toDouble(),
+          min: min,
+          max: max <= min ? min + 1 : max,
+          onChanged: enabled ? onChanged : null,
+        ),
+      ],
     );
   }
 }
