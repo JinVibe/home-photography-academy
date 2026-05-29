@@ -21,7 +21,7 @@ class PhotoAcademyApp extends StatelessWidget {
           primary: const Color(0xFFFF7A59),
           secondary: const Color(0xFF4DB6AC),
           tertiary: const Color(0xFFFFC857),
-          background: const Color(0xFFFFF8EF),
+          surface: const Color(0xFFFFF8EF),
         ),
       ),
       home: const AcademyHomePage(),
@@ -408,7 +408,7 @@ class _FeaturedMissionCard extends StatelessWidget {
               width: 78,
               height: 78,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.85),
+                color: Colors.white.withValues(alpha: 0.85),
                 borderRadius: BorderRadius.circular(26),
               ),
               child: Icon(mission.icon, size: 38, color: const Color(0xFF2F2A25)),
@@ -468,7 +468,7 @@ class _MissionCard extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: mission.color.withOpacity(0.35),
+                color: mission.color.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Icon(mission.icon, color: const Color(0xFF2F2A25)),
@@ -736,7 +736,7 @@ BoxDecoration _softCardDecoration(Color color) {
     borderRadius: BorderRadius.circular(28),
     boxShadow: [
       BoxShadow(
-        color: Colors.brown.withOpacity(0.08),
+        color: Colors.brown.withValues(alpha: 0.08),
         blurRadius: 22,
         offset: const Offset(0, 10),
       ),
