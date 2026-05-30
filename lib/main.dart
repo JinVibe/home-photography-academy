@@ -171,6 +171,7 @@ class _HomeTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final level = (xp ~/ 100) + 1;
     final progress = (xp % 100) / 100;
+    final dailyMission = missions[DateTime.now().day % missions.length];
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -237,6 +238,8 @@ class _HomeTab extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: 22),
+        _DailyChallengeCard(mission: dailyMission, onTap: onMissionTap),
         const SizedBox(height: 22),
         const Text(
           '바로 써먹는 코스',
@@ -336,6 +339,13 @@ class _GrowthTab extends StatelessWidget {
       ('광각 탐험가', Icons.zoom_out_map_rounded, completedMissions >= 4),
       ('7일 출석', Icons.local_fire_department_rounded, false),
     ];
+    final equipments = [
+      ('기본 카메라', Icons.camera_alt_rounded, true),
+      ('격자 노트', Icons.grid_4x4_rounded, xp >= 150),
+      ('미니 조명', Icons.lightbulb_rounded, xp >= 250),
+      ('삼각대', Icons.camera_outdoor_rounded, xp >= 400),
+      ('배경지', Icons.wallpaper_rounded, xp >= 600),
+    ];
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -382,6 +392,28 @@ class _GrowthTab extends StatelessWidget {
               _StatItem(label: '미션', value: '$completedMissions'),
               _StatItem(label: '배지', value: '${badges.where((b) => b.$3).length}'),
             ],
+          ),
+        ),
+        const SizedBox(height: 22),
+        const Text(
+          '포토리 장비',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 94,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: equipments.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final equipment = equipments[index];
+              return _EquipmentChip(
+                label: equipment.$1,
+                icon: equipment.$2,
+                unlocked: equipment.$3,
+              );
+            },
           ),
         ),
         const SizedBox(height: 22),
@@ -470,6 +502,58 @@ class _PhotoLogCard extends StatelessWidget {
             ),
           ),
           const Icon(Icons.collections_bookmark_rounded, color: Color(0xFFFF7A59)),
+        ],
+      ),
+    );
+  }
+}
+
+class _DailyChallengeCard extends StatelessWidget {
+  const _DailyChallengeCard({required this.mission, required this.onTap});
+
+  final CameraMission mission;
+  final ValueChanged<CameraMission> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _softCardDecoration(const Color(0xFF2F2A25)),
+      child: Row(
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFC857),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(Icons.local_fire_department_rounded, color: Color(0xFF2F2A25)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '오늘의 챌린지',
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  mission.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFFFFE1D5), fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+          ),
+          IconButton.filled(
+            style: IconButton.styleFrom(backgroundColor: const Color(0xFFFF7A59)),
+            onPressed: () => onTap(mission),
+            icon: const Icon(Icons.play_arrow_rounded, color: Colors.white),
+          ),
         ],
       ),
     );
@@ -1633,6 +1717,45 @@ class _BadgeCard extends StatelessWidget {
             label,
             textAlign: TextAlign.center,
             style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: unlocked ? const Color(0xFF2F2A25) : Colors.grey.shade500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EquipmentChip extends StatelessWidget {
+  const _EquipmentChip({
+    required this.label,
+    required this.icon,
+    required this.unlocked,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool unlocked;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 104,
+      padding: const EdgeInsets.all(12),
+      decoration: _softCardDecoration(unlocked ? const Color(0xFFE0F4F1) : Colors.white),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: unlocked ? const Color(0xFF4DB6AC) : Colors.grey.shade400),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
               fontWeight: FontWeight.w900,
               color: unlocked ? const Color(0xFF2F2A25) : Colors.grey.shade500,
             ),
