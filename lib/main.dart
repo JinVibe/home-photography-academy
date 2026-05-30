@@ -41,6 +41,7 @@ class _AcademyHomePageState extends State<AcademyHomePage> {
   int selectedIndex = 0;
   int xp = 120;
   int completedMissions = 2;
+  final completedShots = <CompletedMission>[];
 
   final courses = sampleCourses;
 
@@ -49,11 +50,29 @@ class _AcademyHomePageState extends State<AcademyHomePage> {
       ];
 
   void completeMission(CameraMission mission) {
+    final feedback = feedbackForMission(mission);
     setState(() {
       xp += mission.reward;
       completedMissions += 1;
+      completedShots.insert(
+        0,
+        CompletedMission(
+          mission: mission,
+          completedAt: DateTime.now(),
+          feedback: feedback,
+        ),
+      );
     });
     Navigator.pop(context);
+    Future.delayed(const Duration(milliseconds: 220), () {
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _FeedbackSheet(mission: mission, feedback: feedback),
+      );
+    });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
@@ -74,7 +93,11 @@ class _AcademyHomePageState extends State<AcademyHomePage> {
         onMissionTap: openMission,
       ),
       _MissionTab(courses: courses, onMissionTap: openMission),
-      _GrowthTab(xp: xp, completedMissions: completedMissions),
+      _GrowthTab(
+        xp: xp,
+        completedMissions: completedMissions,
+        completedShots: completedShots,
+      ),
     ];
 
     return Scaffold(
@@ -293,10 +316,15 @@ class _MissionTab extends StatelessWidget {
 }
 
 class _GrowthTab extends StatelessWidget {
-  const _GrowthTab({required this.xp, required this.completedMissions});
+  const _GrowthTab({
+    required this.xp,
+    required this.completedMissions,
+    required this.completedShots,
+  });
 
   final int xp;
   final int completedMissions;
+  final List<CompletedMission> completedShots;
 
   @override
   Widget build(BuildContext context) {
@@ -377,7 +405,73 @@ class _GrowthTab extends StatelessWidget {
             return _BadgeCard(label: badge.$1, icon: badge.$2, unlocked: badge.$3);
           },
         ),
+        const SizedBox(height: 22),
+        const Text(
+          '사진 도감',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 12),
+        if (completedShots.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: _softCardDecoration(Colors.white),
+            child: Text(
+              '아직 저장된 촬영 기록이 없어요. 미션을 완료하면 기능별 도감이 채워집니다.',
+              style: TextStyle(color: Colors.brown.shade500, height: 1.4, fontWeight: FontWeight.w700),
+            ),
+          )
+        else
+          for (final shot in completedShots.take(6))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _PhotoLogCard(entry: shot),
+            ),
       ],
+    );
+  }
+}
+
+class _PhotoLogCard extends StatelessWidget {
+  const _PhotoLogCard({required this.entry});
+
+  final CompletedMission entry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _softCardDecoration(Colors.white),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: entry.mission.color.withValues(alpha: 0.42),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(entry.mission.icon, color: const Color(0xFF2F2A25)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.mission.title,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  entry.mission.courseTitle,
+                  style: TextStyle(color: Colors.brown.shade500, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.collections_bookmark_rounded, color: Color(0xFFFF7A59)),
+        ],
+      ),
     );
   }
 }
@@ -691,6 +785,120 @@ class _MissionSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _FeedbackSheet extends StatelessWidget {
+  const _FeedbackSheet({required this.mission, required this.feedback});
+
+  final CameraMission mission;
+  final List<FeedbackCardData> feedback;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 12, 22, 22),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFF8EF),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(34)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 48,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.brown.shade200,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: mission.color.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(mission.icon, color: const Color(0xFF2F2A25)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '피드백 카드',
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        mission.title,
+                        style: TextStyle(color: Colors.brown.shade500, fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            for (final item in feedback)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _FeedbackCard(item: item),
+              ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(54),
+                backgroundColor: const Color(0xFF2F2A25),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.check_rounded),
+              label: const Text('확인'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FeedbackCard extends StatelessWidget {
+  const _FeedbackCard({required this.item});
+
+  final FeedbackCardData item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: _softCardDecoration(Colors.white),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(item.icon, color: const Color(0xFFFF7A59)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 5),
+                Text(item.message, style: const TextStyle(height: 1.35, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1487,6 +1695,87 @@ class AcademyCourse {
   final IconData icon;
   final Color color;
   final List<CameraMission> missions;
+}
+
+class CompletedMission {
+  const CompletedMission({
+    required this.mission,
+    required this.completedAt,
+    required this.feedback,
+  });
+
+  final CameraMission mission;
+  final DateTime completedAt;
+  final List<FeedbackCardData> feedback;
+}
+
+class FeedbackCardData {
+  const FeedbackCardData({
+    required this.title,
+    required this.message,
+    required this.icon,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+}
+
+List<FeedbackCardData> feedbackForMission(CameraMission mission) {
+  final base = <FeedbackCardData>[
+    const FeedbackCardData(
+      title: '수평',
+      message: '격자선을 켜고 피사체의 기준선이 화면과 평행한지 다시 확인하세요.',
+      icon: Icons.grid_4x4_rounded,
+    ),
+    FeedbackCardData(
+      title: mission.feature,
+      message: mission.hook,
+      icon: mission.icon,
+    ),
+  ];
+
+  if (mission.courseTitle.contains('중고')) {
+    return [
+      ...base,
+      const FeedbackCardData(
+        title: '판매 적합도',
+        message: '대표컷은 밝고 깨끗하게, 흠집컷은 숨기지 않고 선명하게 보여주는 구성이 좋습니다.',
+        icon: Icons.sell_rounded,
+      ),
+    ];
+  }
+
+  if (mission.courseTitle.contains('인물')) {
+    return [
+      ...base,
+      const FeedbackCardData(
+        title: '인물 인상',
+        message: '얼굴이 어두워 보이면 빛을 마주 보게 하거나 노출을 살짝 올려보세요.',
+        icon: Icons.face_retouching_natural_rounded,
+      ),
+    ];
+  }
+
+  if (mission.courseTitle.contains('감성')) {
+    return [
+      ...base,
+      const FeedbackCardData(
+        title: '배경 정리',
+        message: '색, 빛, 여백 중 하나만 주인공으로 정하면 사진이 덜 산만해집니다.',
+        icon: Icons.auto_awesome_rounded,
+      ),
+    ];
+  }
+
+  return [
+    ...base,
+    const FeedbackCardData(
+      title: '다음 시도',
+      message: '같은 장면을 밝기나 줌만 바꿔 한 번 더 찍으면 기능 차이가 더 잘 보입니다.',
+      icon: Icons.compare_rounded,
+    ),
+  ];
 }
 
 const sampleCourses = [
