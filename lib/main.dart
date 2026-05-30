@@ -42,44 +42,11 @@ class _AcademyHomePageState extends State<AcademyHomePage> {
   int xp = 120;
   int completedMissions = 2;
 
-  final missions = const [
-    CameraMission(
-      title: '수평 잡기 훈련',
-      feature: '격자',
-      reward: 40,
-      difficulty: '쉬움',
-      instruction: '책상 위 컵을 격자 가운데에 두고 기울지 않게 찍어보세요.',
-      icon: Icons.grid_4x4_rounded,
-      color: Color(0xFFFFC857),
-    ),
-    CameraMission(
-      title: '초점 콕 찍기',
-      feature: '터치 초점',
-      reward: 50,
-      difficulty: '쉬움',
-      instruction: '가까운 물건 하나를 터치해서 초점을 맞춘 뒤 배경을 흐리게 만들어보세요.',
-      icon: Icons.center_focus_strong_rounded,
-      color: Color(0xFF4DB6AC),
-    ),
-    CameraMission(
-      title: '밝기 마법사',
-      feature: '노출 조절',
-      reward: 60,
-      difficulty: '보통',
-      instruction: '창가 사물을 밝게 한 장, 어둡게 한 장 찍고 차이를 비교하세요.',
-      icon: Icons.wb_sunny_rounded,
-      color: Color(0xFFFF8A65),
-    ),
-    CameraMission(
-      title: '0.5x 탐험',
-      feature: '광각',
-      reward: 70,
-      difficulty: '보통',
-      instruction: '같은 방을 1x와 0.5x로 찍고 넓어지는 느낌을 확인하세요.',
-      icon: Icons.zoom_out_map_rounded,
-      color: Color(0xFF7E8CE0),
-    ),
-  ];
+  final courses = sampleCourses;
+
+  List<CameraMission> get missions => [
+        for (final course in courses) ...course.missions,
+      ];
 
   void completeMission(CameraMission mission) {
     setState(() {
@@ -103,9 +70,10 @@ class _AcademyHomePageState extends State<AcademyHomePage> {
         xp: xp,
         completedMissions: completedMissions,
         missions: missions,
+        courses: courses,
         onMissionTap: openMission,
       ),
-      _MissionTab(missions: missions, onMissionTap: openMission),
+      _MissionTab(courses: courses, onMissionTap: openMission),
       _GrowthTab(xp: xp, completedMissions: completedMissions),
     ];
 
@@ -166,12 +134,14 @@ class _HomeTab extends StatelessWidget {
     required this.xp,
     required this.completedMissions,
     required this.missions,
+    required this.courses,
     required this.onMissionTap,
   });
 
   final int xp;
   final int completedMissions;
   final List<CameraMission> missions;
+  final List<AcademyCourse> courses;
   final ValueChanged<CameraMission> onMissionTap;
 
   @override
@@ -246,6 +216,24 @@ class _HomeTab extends StatelessWidget {
         ),
         const SizedBox(height: 22),
         const Text(
+          '바로 써먹는 코스',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 174,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: courses.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final course = courses[index];
+              return _CourseCard(course: course, onMissionTap: onMissionTap);
+            },
+          ),
+        ),
+        const SizedBox(height: 22),
+        const Text(
           '오늘의 추천 미션',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
         ),
@@ -269,9 +257,9 @@ class _HomeTab extends StatelessWidget {
 }
 
 class _MissionTab extends StatelessWidget {
-  const _MissionTab({required this.missions, required this.onMissionTap});
+  const _MissionTab({required this.courses, required this.onMissionTap});
 
-  final List<CameraMission> missions;
+  final List<AcademyCourse> courses;
   final ValueChanged<CameraMission> onMissionTap;
 
   @override
@@ -289,11 +277,16 @@ class _MissionTab extends StatelessWidget {
           style: TextStyle(color: Colors.brown.shade500, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 20),
-        for (final mission in missions)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: _MissionCard(mission: mission, onTap: onMissionTap),
-          ),
+        for (final course in courses) ...[
+          _CourseHeader(course: course),
+          const SizedBox(height: 10),
+          for (final mission in course.missions)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _MissionCard(mission: mission, onTap: onMissionTap),
+            ),
+          const SizedBox(height: 10),
+        ],
       ],
     );
   }
@@ -383,6 +376,112 @@ class _GrowthTab extends StatelessWidget {
             final badge = badges[index];
             return _BadgeCard(label: badge.$1, icon: badge.$2, unlocked: badge.$3);
           },
+        ),
+      ],
+    );
+  }
+}
+
+class _CourseCard extends StatelessWidget {
+  const _CourseCard({required this.course, required this.onMissionTap});
+
+  final AcademyCourse course;
+  final ValueChanged<CameraMission> onMissionTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 260,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(28),
+        onTap: () => onMissionTap(course.missions.first),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: _softCardDecoration(course.color),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.82),
+                      borderRadius: BorderRadius.circular(17),
+                    ),
+                    child: Icon(course.icon, color: const Color(0xFF2F2A25)),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.72),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: Text(
+                      '${course.missions.length}개 미션',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                course.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                course.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: Colors.brown.shade600, height: 1.25, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CourseHeader extends StatelessWidget {
+  const _CourseHeader({required this.course});
+
+  final AcademyCourse course;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: course.color.withValues(alpha: 0.65),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(course.icon, size: 20, color: const Color(0xFF2F2A25)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                course.title,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                course.subtitle,
+                style: TextStyle(color: Colors.brown.shade500, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -1359,6 +1458,8 @@ class CameraMission {
     required this.instruction,
     required this.icon,
     required this.color,
+    required this.courseTitle,
+    required this.hook,
   });
 
   final String title;
@@ -1368,4 +1469,211 @@ class CameraMission {
   final String instruction;
   final IconData icon;
   final Color color;
+  final String courseTitle;
+  final String hook;
 }
+
+class AcademyCourse {
+  const AcademyCourse({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.missions,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final List<CameraMission> missions;
+}
+
+const sampleCourses = [
+  AcademyCourse(
+    title: '진짜 초보 7일 코스',
+    subtitle: '초점, 밝기, 줌부터 차근차근',
+    icon: Icons.school_rounded,
+    color: Color(0xFFFFC857),
+    missions: [
+      CameraMission(
+        title: '수평 잡기 훈련',
+        feature: '격자',
+        reward: 40,
+        difficulty: '쉬움',
+        instruction: '책상 위 컵을 격자 가운데에 두고 기울지 않게 찍어보세요.',
+        icon: Icons.grid_4x4_rounded,
+        color: Color(0xFFFFC857),
+        courseTitle: '진짜 초보 7일 코스',
+        hook: '사진이 삐뚤어지는 습관부터 잡아요.',
+      ),
+      CameraMission(
+        title: '초점 콕 찍기',
+        feature: '터치 초점',
+        reward: 50,
+        difficulty: '쉬움',
+        instruction: '가까운 물건 하나를 터치해서 초점을 맞춘 뒤 배경을 흐리게 만들어보세요.',
+        icon: Icons.center_focus_strong_rounded,
+        color: Color(0xFF4DB6AC),
+        courseTitle: '진짜 초보 7일 코스',
+        hook: '원하는 곳을 선명하게 만드는 첫 기술입니다.',
+      ),
+      CameraMission(
+        title: '밝기 마법사',
+        feature: '노출 조절',
+        reward: 60,
+        difficulty: '보통',
+        instruction: '창가 사물을 밝게 한 장, 어둡게 한 장 찍고 차이를 비교하세요.',
+        icon: Icons.wb_sunny_rounded,
+        color: Color(0xFFFF8A65),
+        courseTitle: '진짜 초보 7일 코스',
+        hook: '밝기만 바꿔도 사진 분위기가 달라져요.',
+      ),
+      CameraMission(
+        title: '0.5x 탐험',
+        feature: '광각',
+        reward: 70,
+        difficulty: '보통',
+        instruction: '같은 방을 1x와 0.5x로 찍고 넓어지는 느낌을 확인하세요.',
+        icon: Icons.zoom_out_map_rounded,
+        color: Color(0xFF7E8CE0),
+        courseTitle: '진짜 초보 7일 코스',
+        hook: '좁은 공간도 넓게 담는 렌즈 감각을 익혀요.',
+      ),
+    ],
+  ),
+  AcademyCourse(
+    title: '당근/중고나라 판매 사진',
+    subtitle: '더 믿음 가고 더 잘 팔리게',
+    icon: Icons.sell_rounded,
+    color: Color(0xFFE0F4F1),
+    missions: [
+      CameraMission(
+        title: '상태가 보이는 기본컷',
+        feature: '수평 + 초점',
+        reward: 60,
+        difficulty: '쉬움',
+        instruction: '판매할 물건을 밝은 곳에 놓고 정면에서 흔들리지 않게 찍어보세요.',
+        icon: Icons.inventory_2_rounded,
+        color: Color(0xFFE0F4F1),
+        courseTitle: '당근/중고나라 판매 사진',
+        hook: '첫 사진은 구매자가 멈춰 보는 대표 이미지입니다.',
+      ),
+      CameraMission(
+        title: '흠집까지 선명하게',
+        feature: '접사 + 터치 초점',
+        reward: 70,
+        difficulty: '보통',
+        instruction: '흠집이나 사용감이 있는 부분을 가까이서 초점 맞춰 찍어보세요.',
+        icon: Icons.search_rounded,
+        color: Color(0xFFE0F4F1),
+        courseTitle: '당근/중고나라 판매 사진',
+        hook: '상태를 솔직하게 보여주면 거래 신뢰가 올라가요.',
+      ),
+      CameraMission(
+        title: '크기감 보여주기',
+        feature: '구도',
+        reward: 70,
+        difficulty: '쉬움',
+        instruction: '손, 책, 컵처럼 크기를 비교할 물체와 함께 판매 물건을 찍어보세요.',
+        icon: Icons.straighten_rounded,
+        color: Color(0xFFE0F4F1),
+        courseTitle: '당근/중고나라 판매 사진',
+        hook: '사진만 보고도 크기를 상상할 수 있게 만듭니다.',
+      ),
+      CameraMission(
+        title: '구매욕 올리는 대표컷',
+        feature: '자연광 + 노출',
+        reward: 90,
+        difficulty: '보통',
+        instruction: '창가 자연광에서 배경을 정리하고 가장 깔끔한 대표 사진을 찍어보세요.',
+        icon: Icons.storefront_rounded,
+        color: Color(0xFFE0F4F1),
+        courseTitle: '당근/중고나라 판매 사진',
+        hook: '상품 사진처럼 보이면 클릭률이 올라갑니다.',
+      ),
+    ],
+  ),
+  AcademyCourse(
+    title: '연인/친구 인물 사진',
+    subtitle: '얼굴은 밝게, 왜곡은 줄이기',
+    icon: Icons.favorite_rounded,
+    color: Color(0xFFFFE1D5),
+    missions: [
+      CameraMission(
+        title: '얼굴 왜곡 줄이기',
+        feature: '1x vs 2x',
+        reward: 70,
+        difficulty: '보통',
+        instruction: '같은 인물을 1x와 2x로 찍어보고 얼굴형이 어떻게 달라지는지 비교하세요.',
+        icon: Icons.face_retouching_natural_rounded,
+        color: Color(0xFFFFE1D5),
+        courseTitle: '연인/친구 인물 사진',
+        hook: '가까이서 찍어서 생기는 얼굴 왜곡을 줄여요.',
+      ),
+      CameraMission(
+        title: '얼굴을 밝게 만들기',
+        feature: '노출 + 빛 방향',
+        reward: 80,
+        difficulty: '쉬움',
+        instruction: '창문이나 조명을 바라보게 하고 얼굴이 어둡지 않게 노출을 조절해보세요.',
+        icon: Icons.light_mode_rounded,
+        color: Color(0xFFFFE1D5),
+        courseTitle: '연인/친구 인물 사진',
+        hook: '인물 사진은 얼굴 밝기가 절반입니다.',
+      ),
+      CameraMission(
+        title: '자연스러운 순간 고르기',
+        feature: '연사 + 선택',
+        reward: 90,
+        difficulty: '보통',
+        instruction: '걷거나 웃는 순간을 여러 장 찍고 가장 자연스러운 한 장을 골라보세요.',
+        icon: Icons.directions_walk_rounded,
+        color: Color(0xFFFFE1D5),
+        courseTitle: '연인/친구 인물 사진',
+        hook: '포즈보다 순간을 잡으면 사진이 덜 어색해요.',
+      ),
+    ],
+  ),
+  AcademyCourse(
+    title: '감성 배경 사진',
+    subtitle: '카페, 거리, 방 안 분위기 살리기',
+    icon: Icons.auto_awesome_rounded,
+    color: Color(0xFFD9E2FF),
+    missions: [
+      CameraMission(
+        title: '색 하나를 주인공으로',
+        feature: '프레이밍',
+        reward: 60,
+        difficulty: '쉬움',
+        instruction: '카페나 방 안에서 하나의 색이 돋보이도록 배경을 정리해 찍어보세요.',
+        icon: Icons.palette_rounded,
+        color: Color(0xFFD9E2FF),
+        courseTitle: '감성 배경 사진',
+        hook: '색을 하나만 정하면 사진이 훨씬 정돈돼 보여요.',
+      ),
+      CameraMission(
+        title: '빛과 그림자 찾기',
+        feature: '노출',
+        reward: 70,
+        difficulty: '보통',
+        instruction: '창가 빛이나 조명 그림자가 보이는 장면을 찾아 분위기 있게 찍어보세요.',
+        icon: Icons.contrast_rounded,
+        color: Color(0xFFD9E2FF),
+        courseTitle: '감성 배경 사진',
+        hook: '감성 사진은 빛보다 그림자가 더 중요할 때가 많아요.',
+      ),
+      CameraMission(
+        title: '여백 만들기',
+        feature: '삼분할',
+        reward: 70,
+        difficulty: '쉬움',
+        instruction: '피사체를 한쪽에 두고 빈 공간이 살아있는 사진을 찍어보세요.',
+        icon: Icons.crop_free_rounded,
+        color: Color(0xFFD9E2FF),
+        courseTitle: '감성 배경 사진',
+        hook: '여백이 생기면 사진이 더 여유롭게 느껴집니다.',
+      ),
+    ],
+  ),
+];
