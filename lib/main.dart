@@ -826,6 +826,11 @@ class _MissionSheet extends StatelessWidget {
                       '${mission.feature} 기능 · ${mission.reward}XP',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                     ),
+                    const SizedBox(height: 8),
+                    Text(
+                      mission.hook,
+                      style: TextStyle(color: Colors.brown.shade700, height: 1.35, fontWeight: FontWeight.w700),
+                    ),
                   ],
                 ),
               ),
@@ -835,6 +840,8 @@ class _MissionSheet extends StatelessWidget {
                 body: mission.instruction,
                 icon: Icons.flag_rounded,
               ),
+              const SizedBox(height: 12),
+              _ChecklistBlock(items: checklistForMission(mission)),
               const SizedBox(height: 12),
               const _GuideBlock(
                 title: '촬영 팁',
@@ -981,6 +988,47 @@ class _FeedbackCard extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChecklistBlock extends StatelessWidget {
+  const _ChecklistBlock({required this.items});
+
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _softCardDecoration(Colors.white),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.checklist_rounded, color: Color(0xFFFF7A59)),
+              SizedBox(width: 8),
+              Text('촬영 체크리스트', style: TextStyle(fontWeight: FontWeight.w900)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.check_circle_rounded, size: 18, color: Color(0xFF4DB6AC)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(item, style: const TextStyle(height: 1.35, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -1898,6 +1946,38 @@ List<FeedbackCardData> feedbackForMission(CameraMission mission) {
       message: '같은 장면을 밝기나 줌만 바꿔 한 번 더 찍으면 기능 차이가 더 잘 보입니다.',
       icon: Icons.compare_rounded,
     ),
+  ];
+}
+
+List<String> checklistForMission(CameraMission mission) {
+  if (mission.courseTitle.contains('중고')) {
+    return const [
+      '물건 표면이 잘 보이도록 밝은 곳에서 찍기',
+      '배경에 생활용품이 너무 많이 보이지 않게 정리하기',
+      '흠집이나 사용감은 따로 한 장 더 선명하게 남기기',
+    ];
+  }
+
+  if (mission.courseTitle.contains('인물')) {
+    return const [
+      '상대방에게 촬영과 저장 동의를 먼저 받기',
+      '얼굴이 어둡지 않도록 빛 방향 확인하기',
+      '공개 업로드 전 상대방이 마음에 들어 하는 사진인지 확인하기',
+    ];
+  }
+
+  if (mission.courseTitle.contains('감성')) {
+    return const [
+      '색, 빛, 여백 중 하나만 주인공으로 정하기',
+      '화면 가장자리에 산만한 물건이 걸리지 않는지 확인하기',
+      '노출을 조금 낮춰 분위기가 살아나는지 비교하기',
+    ];
+  }
+
+  return const [
+    '격자와 수평을 먼저 확인하기',
+    '피사체를 터치해 초점 맞추기',
+    '같은 장면을 설정만 바꿔 한 번 더 찍어보기',
   ];
 }
 
